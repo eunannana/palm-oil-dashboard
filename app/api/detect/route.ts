@@ -10,7 +10,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           status: "error",
-          message: "No image uploaded.",
+          message: "No image received from camera.",
         },
         { status: 400 }
       );
@@ -21,13 +21,14 @@ export async function POST(request: Request) {
       SPACE UNTUK INTEGRASI MODEL DEEP LEARNING
       ==========================================================
 
-      Saat ini bagian ini masih dummy/simulasi.
+      Flow kamera:
+      1. User membuka kamera di dashboard.
+      2. User capture gambar.
+      3. Gambar dikirim ke /api/detect.
+      4. /api/detect mengirim image ke backend model.
+      5. Backend mengembalikan hasil deteksi.
 
-      Nanti kalau model deep learning kamu sudah siap, kamu bisa
-      ganti bagian dummy result di bawah dengan pemanggilan ke
-      backend Python/FastAPI.
-
-      Contoh jika memakai FastAPI:
+      Jika memakai FastAPI:
 
       const backendForm = new FormData();
       backendForm.append("image", image);
@@ -40,19 +41,22 @@ export async function POST(request: Request) {
       const modelResult = await response.json();
       return NextResponse.json(modelResult);
 
-      Backend FastAPI nanti sebaiknya mengembalikan JSON dengan format:
+      Format output backend:
       {
-        predictedClass: "Ripe",
-        confidence: 92.7,
-        detections: [...],
-        summary: {...}
+        "status": "success",
+        "message": "Detection completed",
+        "predictedClass": "Ripe",
+        "confidence": 92.7,
+        "detections": [...],
+        "summary": {
+          "underRipe": 1,
+          "ripe": 3,
+          "overRipe": 1
+        }
       }
-
-      Kalau model kamu YOLO, hasil bounding box dari YOLO bisa langsung
-      dikonversi ke format x, y, width, height dalam persen.
     */
 
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     const result: DetectionResponse = {
       status: "success",
@@ -64,8 +68,8 @@ export async function POST(request: Request) {
           id: 1,
           label: "Ripe",
           confidence: 0.94,
-          x: 25,
-          y: 32,
+          x: 24,
+          y: 30,
           width: 18,
           height: 22,
         },
@@ -74,7 +78,7 @@ export async function POST(request: Request) {
           label: "Ripe",
           confidence: 0.91,
           x: 48,
-          y: 40,
+          y: 38,
           width: 17,
           height: 20,
         },
@@ -91,8 +95,8 @@ export async function POST(request: Request) {
           id: 4,
           label: "Under Ripe",
           confidence: 0.79,
-          x: 68,
-          y: 28,
+          x: 67,
+          y: 27,
           width: 15,
           height: 18,
         },
@@ -120,7 +124,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         status: "error",
-        message: "Failed to process image.",
+        message: "Failed to process camera image.",
       },
       { status: 500 }
     );

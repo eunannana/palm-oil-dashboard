@@ -9,7 +9,7 @@ import type {
 import MetricCard from "@/components/MetricCard";
 
 type DetectionResultProps = {
-  previewUrl: string | null;
+  capturedImage: string | null;
   result: DetectionResponse | null;
 };
 
@@ -57,7 +57,7 @@ function DetectionBoxOverlay({ box }: { box: DetectionBox }) {
 }
 
 export default function DetectionResult({
-  previewUrl,
+  capturedImage,
   result,
 }: DetectionResultProps) {
   return (
@@ -70,10 +70,10 @@ export default function DetectionResult({
 
           <div>
             <h2 className="text-xl font-black text-slate-900">
-              Grading Result
+              Detection Result
             </h2>
             <p className="text-sm text-slate-500">
-              Detection output and ripeness distribution.
+              Camera-based FFB grading output.
             </p>
           </div>
         </div>
@@ -81,17 +81,17 @@ export default function DetectionResult({
         {result && (
           <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700">
             <CheckCircle2 className="h-4 w-4" />
-            Analysis Completed
+            Detection Completed
           </div>
         )}
       </div>
 
       <div className="relative overflow-hidden rounded-[2rem] bg-slate-100">
-        {previewUrl ? (
+        {capturedImage ? (
           <>
             <img
-              src={previewUrl}
-              alt="FFB detection preview"
+              src={capturedImage}
+              alt="Captured FFB result"
               className="h-[430px] w-full object-cover"
             />
 
@@ -106,10 +106,10 @@ export default function DetectionResult({
                 <Activity className="h-10 w-10 text-slate-300" />
               </div>
               <p className="text-lg font-black text-slate-700">
-                No image analyzed yet
+                No detection result yet
               </p>
               <p className="mt-2 text-sm text-slate-500">
-                Upload an FFB image and run analysis to view grading results.
+                Capture an image from camera and run detection.
               </p>
             </div>
           </div>
@@ -122,21 +122,21 @@ export default function DetectionResult({
             <MetricCard
               title="Final Grade"
               value={result.predictedClass}
-              subtitle="Main predicted ripeness class"
+              subtitle="Main predicted class"
               variant="dark"
             />
 
             <MetricCard
               title="Detection Confidence"
               value={`${result.confidence.toFixed(1)}%`}
-              subtitle="Overall model confidence"
+              subtitle="Overall confidence"
               variant="green"
             />
 
             <MetricCard
               title="Detected Objects"
               value={result.detections.length}
-              subtitle="Total FFB regions detected"
+              subtitle="Total detected FFB areas"
               variant="orange"
             />
 
@@ -149,7 +149,7 @@ export default function DetectionResult({
                   ? "Medium"
                   : "Low"
               }
-              subtitle="Confidence reliability level"
+              subtitle="Reliability level"
               variant="green"
             />
           </div>
@@ -163,21 +163,21 @@ export default function DetectionResult({
               <MetricCard
                 title="Under Ripe"
                 value={result.summary.underRipe}
-                subtitle="Detected unripe FFB areas"
+                subtitle="Detected under ripe areas"
                 variant="green"
               />
 
               <MetricCard
                 title="Ripe"
                 value={result.summary.ripe}
-                subtitle="Detected optimal FFB areas"
+                subtitle="Detected ripe areas"
                 variant="orange"
               />
 
               <MetricCard
                 title="Over Ripe"
                 value={result.summary.overRipe}
-                subtitle="Detected overripe FFB areas"
+                subtitle="Detected over ripe areas"
                 variant="red"
               />
             </div>
@@ -185,8 +185,7 @@ export default function DetectionResult({
         </>
       ) : (
         <div className="mt-6 rounded-3xl bg-slate-50 p-5 text-sm leading-relaxed text-slate-500">
-          The grading result will appear here after the image is processed by
-          the deep learning model.
+          Detection result will appear here after the camera image is processed.
         </div>
       )}
     </section>

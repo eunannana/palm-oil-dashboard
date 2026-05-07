@@ -2,32 +2,37 @@
 
 import { useState } from "react";
 import Header from "@/components/Header";
-import FileUpload from "@/components/FileUpload";
-import DetectionResult from "@/components/DetectionResult";
-import type { DetectionResponse } from "@/types/detection";
-import { BarChart3, ShieldCheck, Timer } from "lucide-react";
+import LiveInspectionPanel from "@/components/LiveInspectionPanel";
+import ReportPanel from "@/components/ReportPanel";
 import Footer from "@/components/Footer";
+import type { DetectionResponse } from "@/types/detection";
+import { BarChart3, FileCheck2, Timer } from "lucide-react";
 
 export default function HomePage() {
-  const [selectedImage, setSelectedImage] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [result, setResult] = useState<DetectionResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInspectionLocked, setIsInspectionLocked] = useState(false);
 
-  const handleImageSelect = (file: File) => {
-    setSelectedImage(file);
-    setPreviewUrl(URL.createObjectURL(file));
-    setResult(null);
-  };
+  const [batchNumber, setBatchNumber] = useState("");
+  const [inspectionDate, setInspectionDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
+  const [remarks, setRemarks] = useState("");
 
-  const handleAnalyze = async () => {
-    if (!selectedImage) return;
-
+  const handleCaptureAndDetect = async (
+    imageDataUrl: string,
+    imageFile: File
+  ) => {
     try {
       setIsLoading(true);
+      setCapturedImage(imageDataUrl);
 
       const formData = new FormData();
-      formData.append("image", selectedImage);
+      formData.append("image", imageFile);
+      formData.append("batchNumber", batchNumber);
+      formData.append("inspectionDate", inspectionDate);
+      formData.append("remarks", remarks);
 
       const response = await fetch("/api/detect", {
         method: "POST",
@@ -39,91 +44,57 @@ export default function HomePage() {
       }
 
       const data: DetectionResponse = await response.json();
+
       setResult(data);
+      setIsInspectionLocked(true);
     } catch (error) {
       console.error(error);
-      alert("Failed to analyze image. Please try again.");
+      alert("Failed to analyze FFB image. Please try again.");
+      setIsInspectionLocked(false);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleReset = () => {
+    setCapturedImage(null);
+    setResult(null);
+    setIsLoading(false);
+    setIsInspectionLocked(false);
+
+    setBatchNumber("");
+    setInspectionDate(new Date().toISOString().split("T")[0]);
+    setRemarks("");
+  };
+
   return (
-  <main className="min-h-screen bg-[#f6faf7] text-slate-900">
-    <Header />
+    <main className="min-h-screen bg-[#f6faf7] text-slate-900">
+      <Header />
 
-    <div className="mx-auto max-w-7xl px-4 pb-10 md:px-8 lg:px-10">
-      {/* <section className="mt-8 grid gap-4 md:grid-cols-3">
-          <div className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
-              <BarChart3 className="h-6 w-6" />
-            </div>
-            <h3 className="text-lg font-black text-slate-900">
-              Ripeness Classification
-            </h3>
-            <p className="mt-2 text-sm leading-relaxed text-slate-500">
-              Classifies FFB into Under Ripe, Ripe, and Over Ripe categories.
-            </p>
-          </div>
-
-          <div className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50 text-orange-600">
-              <ShieldCheck className="h-6 w-6" />
-            </div>
-            <h3 className="text-lg font-black text-slate-900">
-              Confidence-Based Output
-            </h3>
-            <p className="mt-2 text-sm leading-relaxed text-slate-500">
-              Displays detection percentage to support transparent grading
-              interpretation.
-            </p>
-          </div>
-
-          <div className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
-              <Timer className="h-6 w-6" />
-            </div>
-            <h3 className="text-lg font-black text-slate-900">
-              Fast Image Analysis
-            </h3>
-            <p className="mt-2 text-sm leading-relaxed text-slate-500">
-              Designed for quick image upload, automated detection, and visual
-              result presentation.
-            </p>
-          </div>
-        </section> */}
-
-        <section className="mt-6 grid gap-6 xl:grid-cols-[420px_1fr]">
-          <FileUpload
-            selectedImage={selectedImage}
-            previewUrl={previewUrl}
+      <div className="mx-auto max-w-7xl px-4 pb-10 md:px-8 lg:px-10">
+        <section className="mt-6">
+          <LiveInspectionPanel
+            capturedImage={capturedImage}
+            result={result}
             isLoading={isLoading}
-            onImageSelect={handleImageSelect}
-            onAnalyze={handleAnalyze}
+            isInspectionLocked={isInspectionLocked}
+            onCaptureAndDetect={handleCaptureAndDetect}
+            onReset={handleReset}
           />
-
-          <DetectionResult previewUrl={previewUrl} result={result} />
         </section>
 
-        {/* <section className="mt-6 rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="text-xl font-black text-slate-900">
-                Model Integration Space
-              </h2>
-              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-500">
-                This dashboard is ready to be connected with a deep learning
-                model through the API route. The current result is simulated and
-                can be replaced with real inference output from YOLO, Faster
-                R-CNN, EfficientDet, or another object detection model.
-              </p>
-            </div>
-
-            <div className="rounded-2xl bg-emerald-50 px-5 py-3 text-sm font-black text-emerald-700">
-              API Ready: /api/detect
-            </div>
-          </div>
-        </section> */}
+        <section className="mt-6">
+          <ReportPanel
+            result={result}
+            capturedImage={capturedImage}
+            batchNumber={batchNumber}
+            inspectionDate={inspectionDate}
+            remarks={remarks}
+            onBatchNumberChange={setBatchNumber}
+            onInspectionDateChange={setInspectionDate}
+            onRemarksChange={setRemarks}
+          />
+        </section>
       </div>
 
       <Footer />
