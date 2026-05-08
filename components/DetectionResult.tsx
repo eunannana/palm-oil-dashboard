@@ -10,6 +10,7 @@ import MetricCard from "@/components/MetricCard";
 
 type DetectionResultProps = {
   result: DetectionResponse | null;
+  isLoading: boolean;
 };
 
 const boxStyle: Record<
@@ -57,6 +58,7 @@ function DetectionBoxOverlay({ box }: { box: DetectionBox }) {
 
 export default function DetectionResult({
   result,
+  isLoading,
 }: DetectionResultProps) {
   return (
     <section className="rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-sm">
@@ -97,6 +99,23 @@ export default function DetectionResult({
               <DetectionBoxOverlay key={box.id} box={box} />
             ))}
           </>
+        ) : isLoading ? (
+          <div className="relative flex h-[430px] items-center justify-center overflow-hidden p-8 text-center">
+            <div className="loader-scanline absolute left-0 right-0 top-0 h-24 bg-gradient-to-b from-emerald-300/20 via-emerald-300/10 to-transparent" />
+            <div className="z-10">
+              <div className="relative mx-auto mb-5 h-24 w-24">
+                <span className="absolute inset-0 rounded-full border-2 border-emerald-300/40" />
+                <span className="loader-orbit absolute inset-2 rounded-full border-2 border-emerald-500 border-l-transparent" />
+                <span className="loader-orbit-slow absolute inset-5 rounded-full border-2 border-emerald-700/70 border-r-transparent" />
+              </div>
+              <p className="text-lg font-black text-slate-700">
+                Processing detection result
+              </p>
+              <p className="mt-2 text-sm text-slate-500">
+                Model sedang menganalisis citra FFB. Hasil akan muncul otomatis.
+              </p>
+            </div>
+          </div>
         ) : (
           <div className="flex h-[430px] items-center justify-center p-8 text-center">
             <div>
@@ -181,6 +200,10 @@ export default function DetectionResult({
             </div>
           </div>
         </>
+      ) : isLoading ? (
+        <div className="mt-6 rounded-3xl bg-emerald-50 p-5 text-sm leading-relaxed text-emerald-900">
+          Waiting for inference results from the server. This may take a little longer when the free backend is busy..
+        </div>
       ) : (
         <div className="mt-6 rounded-3xl bg-slate-50 p-5 text-sm leading-relaxed text-slate-500">
           Detection result will appear here after the camera image is processed.

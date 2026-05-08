@@ -5,10 +5,22 @@ import type {
   RipenessClass,
 } from "@/types/detection";
 
-const FASTAPI_PREDICT_URL =
-  process.env.FASTAPI_PREDICT_URL ?? "http://localhost:8000/predict";
-const FASTAPI_ROOT_URL =
-  process.env.FASTAPI_ROOT_URL ?? FASTAPI_PREDICT_URL.replace(/\/predict\/?$/i, "");
+function normalizeBackendUrl(url: string): string {
+  const trimmed = url.trim();
+
+  if (/^http:\/\/(?!localhost|127\.0\.0\.1)/i.test(trimmed)) {
+    return trimmed.replace(/^http:\/\//i, "https://");
+  }
+
+  return trimmed;
+}
+
+const FASTAPI_PREDICT_URL = normalizeBackendUrl(
+  process.env.FASTAPI_PREDICT_URL ?? "http://localhost:8000/predict"
+);
+const FASTAPI_ROOT_URL = normalizeBackendUrl(
+  process.env.FASTAPI_ROOT_URL ?? FASTAPI_PREDICT_URL.replace(/\/predict\/?$/i, "")
+);
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -105,14 +117,23 @@ export async function POST(request: Request) {
       );
     }
 
-    const backendForm = new FormData();
-    backendForm.append("file", image);
+    const imageBytes = await image.arrayBuffer();
+
+    const buildBackendFormData = () => {
+      const backendForm = new FormData();
+      const blob = new Blob([imageBytes], {
+        type: image.type || "application/octet-stream",
+      });
+
+      backendForm.append("file", blob, image.name || "capture.jpg");
+      return backendForm;
+    };
 
     // try immediate predict first
     try {
       const response = await fetch(FASTAPI_PREDICT_URL, {
         method: "POST",
-        body: backendForm,
+        body: buildBackendFormData(),
       });
 
       if (!response.ok) {
@@ -141,7 +162,7 @@ export async function POST(request: Request) {
         try {
           const response = await fetch(FASTAPI_PREDICT_URL, {
             method: "POST",
-            body: backendForm,
+            body: buildBackendFormData(),
           });
 
           if (!response.ok) {
@@ -176,5 +197,46 @@ export async function POST(request: Request) {
       },
       { status: 500 }
     );
+  }
+}
+
+export async function GET(request: Request) {
+  // Lightweight wake endpoint: try to hit the root URL and wait until the
+  // backend responds or we exhaust retries. This lets the frontend show a
+  // loading indicator while a sleeping free-hosted backend wakes up.
+  try {
+    // try an immediate GET to the root
+    try {
+      const resp = await fetch(FASTAPI_ROOT_URL, { method: "GET" });
+      if (resp.ok) {
+        return NextResponse.json({ status: "ready" });
+      }
+    } catch {
+      // ignore immediate failure and continue to polling
+    }
+
+    // poll the root URL with backoff
+    const maxRetries = 6;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const delayMs = 1000 * attempt;
+      await sleep(delayMs);
+
+      try {
+        const resp = await fetch(FASTAPI_ROOT_URL, { method: "GET" });
+        if (resp.ok) {
+          return NextResponse.json({ status: "ready", attempts: attempt });
+        }
+      } catch {
+        // continue
+      }
+    }
+
+    return NextResponse.json(
+      { status: "error", message: "Backend did not respond after wake attempts." },
+      { status: 502 }
+    );
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({ status: "error", message: "Wake attempt failed." }, { status: 500 });
   }
 }

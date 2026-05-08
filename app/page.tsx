@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Header from "@/components/Header";
 import LiveInspectionPanel from "@/components/LiveInspectionPanel";
 import DetectionResult from "@/components/DetectionResult";
@@ -14,6 +14,7 @@ export default function HomePage() {
   const [result, setResult] = useState<DetectionResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isWaking, setIsWaking] = useState(false);
+  const [isApiWaking, setIsApiWaking] = useState(false);
   const [isInspectionLocked, setIsInspectionLocked] = useState(false);
 
   const [batchNumber, setBatchNumber] = useState("");
@@ -170,16 +171,62 @@ export default function HomePage() {
     setRemarks("");
   };
 
+  // Wake the FastAPI backend on initial page load (useful when backend sleeps)
+  useEffect(() => {
+    let mounted = true;
+
+    const wake = async () => {
+      try {
+        setIsApiWaking(true);
+        const resp = await fetch("/api/detect");
+        if (!mounted) return;
+        // we don't strictly need the body, but reading it may reveal errors
+        await resp.json().catch(() => {});
+      } catch (err) {
+        // ignore - UI will stop showing waking after attempts
+        console.error("Wake request failed:", err);
+      } finally {
+        if (mounted) setIsApiWaking(false);
+      }
+    };
+
+    wake();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   return (
     <main className="min-h-screen bg-[#f6faf7] text-slate-900">
       <Header />
 
       <div className="mx-auto max-w-7xl px-4 pb-10 md:px-8 lg:px-10">
-        {isWaking && (
-          <div className="mb-4 rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">
-            Waking backend model — this may take a few seconds. Please wait...
+        {isApiWaking && (
+          <div className="mb-4 flex items-center gap-3 rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+            <div className="relative h-6 w-6">
+              <span className="absolute inset-0 rounded-full border-2 border-amber-300/60" />
+              <span className="loader-orbit absolute inset-0 rounded-full border-2 border-amber-500 border-t-transparent" />
+            </div>
+            <p>
+              Waking backend model - initializing. This may take a few seconds.
+              Please wait...
+            </p>
           </div>
         )}
+
+        {isLoading && isWaking && (
+          <div className="mb-4 flex items-center gap-3 rounded-2xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">
+            <div className="relative h-6 w-6">
+              <span className="absolute inset-0 rounded-full border-2 border-emerald-300/50" />
+              <span className="loader-orbit absolute inset-0 rounded-full border-2 border-emerald-700 border-b-transparent" />
+            </div>
+            <p>
+              Processing is taking longer than usual because the free backend is waking up. Detection is still running.
+            </p>
+          </div>
+        )}
+        {/* Kick off a backend wake on initial page load so uploads/capture are fast */}
         <div className="mt-6">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -240,7 +287,7 @@ export default function HomePage() {
             </div>
 
             <div className="w-full">
-              <DetectionResult result={result} />
+              <DetectionResult result={result} isLoading={isLoading} />
             </div>
 
             <div className="w-full">

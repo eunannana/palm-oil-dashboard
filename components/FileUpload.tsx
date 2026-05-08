@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, DragEvent, useRef } from "react";
-import { ImagePlus, UploadCloud, Zap } from "lucide-react";
+import { ImagePlus, Loader2, UploadCloud, Zap } from "lucide-react";
 
 type FileUploadProps = {
   selectedImage: File | null;
@@ -63,7 +63,9 @@ export default function FileUpload({
       </div>
 
       <div
-        onClick={() => inputRef.current?.click()}
+        onClick={() => {
+          if (!isLoading) inputRef.current?.click();
+        }}
         onDrop={handleDrop}
         onDragOver={(event) => event.preventDefault()}
         className="flex min-h-[360px] cursor-pointer flex-col items-center justify-center rounded-[2rem] border-2 border-dashed border-emerald-200 bg-gradient-to-br from-emerald-50/70 to-white p-6 text-center transition hover:border-emerald-400 hover:bg-emerald-50"
@@ -76,28 +78,48 @@ export default function FileUpload({
           onChange={handleChange}
         />
 
-        {previewUrl ? (
-          <img
-            src={previewUrl}
-            alt="Uploaded FFB"
-            className="max-h-[320px] w-full rounded-3xl object-contain shadow-sm"
-          />
-        ) : (
-          <>
-            <div className="mb-5 flex h-24 w-24 items-center justify-center rounded-full bg-white shadow-sm">
-              <ImagePlus className="h-12 w-12 text-emerald-700" />
+        <div className="relative w-full">
+          {previewUrl ? (
+            <img
+              src={previewUrl}
+              alt="Uploaded FFB"
+              className="max-h-[320px] w-full rounded-3xl object-contain shadow-sm"
+            />
+          ) : (
+            <>
+              <div className="mb-5 flex h-24 w-24 items-center justify-center rounded-full bg-white shadow-sm">
+                <ImagePlus className="h-12 w-12 text-emerald-700" />
+              </div>
+
+              <p className="text-lg font-black text-slate-800">
+                Drag & drop FFB image here
+              </p>
+              <p className="mt-2 text-sm text-slate-500">or click to browse</p>
+
+              <p className="mt-6 rounded-full bg-white px-4 py-2 text-xs font-semibold text-slate-400 shadow-sm">
+                JPG, JPEG, PNG up to 10MB
+              </p>
+            </>
+          )}
+
+          {isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center rounded-3xl bg-slate-950/65 backdrop-blur-sm">
+              <div className="text-center text-white">
+                <div className="relative mx-auto mb-4 h-20 w-20">
+                  <span className="absolute inset-0 rounded-full border-2 border-emerald-400/40" />
+                  <span className="loader-orbit absolute inset-2 rounded-full border-2 border-emerald-300 border-t-transparent" />
+                  <span className="loader-orbit-slow absolute inset-4 rounded-full border-2 border-emerald-100/90 border-b-transparent" />
+                </div>
+                <p className="text-base font-black">Analyzing FFB image...</p>
+                <div className="mx-auto mt-3 flex w-28 items-center justify-center gap-1.5">
+                  <span className="loader-dot h-2 w-2 rounded-full bg-emerald-300" />
+                  <span className="loader-dot h-2 w-2 rounded-full bg-emerald-300 [animation-delay:0.18s]" />
+                  <span className="loader-dot h-2 w-2 rounded-full bg-emerald-300 [animation-delay:0.36s]" />
+                </div>
+              </div>
             </div>
-
-            <p className="text-lg font-black text-slate-800">
-              Drag & drop FFB image here
-            </p>
-            <p className="mt-2 text-sm text-slate-500">or click to browse</p>
-
-            <p className="mt-6 rounded-full bg-white px-4 py-2 text-xs font-semibold text-slate-400 shadow-sm">
-              JPG, JPEG, PNG up to 10MB
-            </p>
-          </>
-        )}
+          )}
+        </div>
       </div>
 
       {selectedImage && (
@@ -115,8 +137,17 @@ export default function FileUpload({
           disabled={!selectedImage || isLoading}
           className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-5 py-4 text-base font-black text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
-          <Zap className="h-5 w-5" />
-          {isLoading ? "Analyzing FFB Image..." : "Analyze FFB Image"}
+          {isLoading ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Analyzing FFB Image...
+            </>
+          ) : (
+            <>
+              <Zap className="h-5 w-5" />
+              Analyze FFB Image
+            </>
+          )}
         </button>
       </div>
     </section>
