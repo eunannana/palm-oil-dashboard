@@ -25,6 +25,7 @@ export type DetectionResponse = {
   summary: DetectionSummary;
   totalDetections?: number;
   annotatedImage?: string;
+  rawDetections?: FastApiDetectionBox[];
 };
 
 export type FastApiDetectionBox = {

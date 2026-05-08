@@ -80,7 +80,7 @@ export default function FileUpload({
           <img
             src={previewUrl}
             alt="Uploaded FFB"
-            className="max-h-[320px] w-full rounded-3xl object-cover shadow-sm"
+            className="max-h-[320px] w-full rounded-3xl object-contain shadow-sm"
           />
         ) : (
           <>
@@ -109,14 +109,16 @@ export default function FileUpload({
         </div>
       )}
 
-      <button
-        onClick={onAnalyze}
-        disabled={!selectedImage || isLoading}
-        className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-5 py-4 text-base font-black text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-      >
-        <Zap className="h-5 w-5" />
-        {isLoading ? "Analyzing FFB Image..." : "Analyze FFB Image"}
-      </button>
+      <div className="mt-5">
+        <button
+          onClick={onAnalyze}
+          disabled={!selectedImage || isLoading}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-5 py-4 text-base font-black text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+        >
+          <Zap className="h-5 w-5" />
+          {isLoading ? "Analyzing FFB Image..." : "Analyze FFB Image"}
+        </button>
+      </div>
     </section>
   );
 }

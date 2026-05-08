@@ -7,6 +7,12 @@ import type {
 
 const FASTAPI_PREDICT_URL =
   process.env.FASTAPI_PREDICT_URL ?? "http://localhost:8000/predict";
+const FASTAPI_ROOT_URL =
+  process.env.FASTAPI_ROOT_URL ?? FASTAPI_PREDICT_URL.replace(/\/predict\/?$/i, "");
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 function normalizeClassName(className: string): RipenessClass {
   const normalized = className.toLowerCase().replace(/\s+/g, " ").trim();
@@ -102,26 +108,64 @@ export async function POST(request: Request) {
     const backendForm = new FormData();
     backendForm.append("file", image);
 
-    const response = await fetch(FASTAPI_PREDICT_URL, {
-      method: "POST",
-      body: backendForm,
-    });
+    // try immediate predict first
+    try {
+      const response = await fetch(FASTAPI_PREDICT_URL, {
+        method: "POST",
+        body: backendForm,
+      });
 
-    const payload = (await response.json()) as FastApiDetectionResponse | { error?: string };
+      if (!response.ok) {
+        // if server returned 5xx, attempt wake and retry below
+        throw new Error(`FastAPI returned status ${response.status}`);
+      }
 
-    if (!response.ok) {
+      const payload = (await response.json()) as FastApiDetectionResponse;
+
+      const normalized = normalizeBackendResponse(payload);
+      return NextResponse.json({ ...normalized, rawDetections: payload.detections });
+    } catch {
+      // Try to wake the backend (useful for free hosting that sleeps)
+      try {
+        await fetch(FASTAPI_ROOT_URL, { method: "GET" });
+      } catch {
+        // ignore - waking may still happen at host level
+      }
+
+      // Poll predict endpoint a few times with backoff
+      const maxRetries = 6;
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        const delayMs = 1000 * attempt; // 1s, 2s, 3s...
+        await sleep(delayMs);
+
+        try {
+          const response = await fetch(FASTAPI_PREDICT_URL, {
+            method: "POST",
+            body: backendForm,
+          });
+
+          if (!response.ok) {
+            continue;
+          }
+
+          const payload = (await response.json()) as FastApiDetectionResponse;
+          const normalized = normalizeBackendResponse(payload);
+          return NextResponse.json({ ...normalized, rawDetections: payload.detections });
+        } catch {
+          // continue retrying
+          continue;
+        }
+      }
+
       return NextResponse.json(
         {
           status: "error",
           message:
-            ("error" in payload && payload.error) ||
-            "Failed to process image with FastAPI backend.",
+            "Backend is currently unreachable. We attempted to wake it but did not receive a response. Try again in a few seconds.",
         },
-        { status: response.status }
+        { status: 502 }
       );
     }
-
-    return NextResponse.json(normalizeBackendResponse(payload as FastApiDetectionResponse));
   } catch (error) {
     console.error(error);
 

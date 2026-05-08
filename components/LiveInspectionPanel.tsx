@@ -3,106 +3,72 @@
 import {
   Camera,
   CameraOff,
-  RefreshCcw,
   Loader2,
-  CheckCircle2,
   ScanLine,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type {
-  DetectionBox,
-  DetectionResponse,
-  RipenessClass,
-} from "@/types/detection";
-import MetricCard from "@/components/MetricCard";
-
 type LiveInspectionPanelProps = {
   capturedImage: string | null;
-  result: DetectionResponse | null;
   isLoading: boolean;
   isInspectionLocked: boolean;
   onCaptureAndDetect: (imageDataUrl: string, imageFile: File) => void;
-  onReset: () => void;
 };
-
-const boxStyle: Record<
-  RipenessClass,
-  {
-    border: string;
-    badge: string;
-  }
-> = {
-  "Under Ripe": {
-    border: "border-emerald-500",
-    badge: "bg-emerald-600",
-  },
-  Ripe: {
-    border: "border-orange-500",
-    badge: "bg-orange-500",
-  },
-  "Over Ripe": {
-    border: "border-red-500",
-    badge: "bg-red-600",
-  },
-};
-
-function DetectionBoxOverlay({ box }: { box: DetectionBox }) {
-  const style = boxStyle[box.label];
-
-  return (
-    <div
-      className={`absolute border-2 ${style.border}`}
-      style={{
-        left: `${box.x}%`,
-        top: `${box.y}%`,
-        width: `${box.width}%`,
-        height: `${box.height}%`,
-      }}
-    >
-      <span
-        className={`absolute -top-8 left-0 whitespace-nowrap rounded-lg px-2 py-1 text-xs font-black text-white ${style.badge}`}
-      >
-        {box.label} {(box.confidence * 100).toFixed(0)}%
-      </span>
-    </div>
-  );
-}
 
 export default function LiveInspectionPanel({
   capturedImage,
-  result,
   isLoading,
   isInspectionLocked,
   onCaptureAndDetect,
-  onReset,
 }: LiveInspectionPanelProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [facingMode, setFacingMode] = useState<"environment" | "user">(
+    "environment"
+  );
 
-  const startCamera = async () => {
+  const startCamera = async (
+    requestedFacingMode: "environment" | "user" = facingMode
+  ) => {
     try {
       setCameraError(null);
+      // Prefer a constrained request with facingMode, but fall back to a
+      // permissive request if the browser/device rejects the constraint.
+      let stream: MediaStream | null = null;
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "environment",
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      });
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: requestedFacingMode,
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        });
+      } catch (err) {
+        // fallback: try without facingMode (some browsers/devices reject the constraint)
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
+      }
+
+      streamRef.current = stream;
+
+      // Ensure the video element is rendered first, then attach the stream.
+      setIsCameraActive(true);
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current?.play();
-          setIsCameraActive(true);
-        };
+        videoRef.current.play().catch(() => {
+          /* ignore play errors; video should still render when allowed */
+        });
       }
+
+      setFacingMode(requestedFacingMode);
     } catch (error) {
       console.error(error);
       setCameraError(
@@ -111,12 +77,36 @@ export default function LiveInspectionPanel({
     }
   };
 
+  // When `isCameraActive` becomes true ensure the media stream is attached
+  // to the video element. This covers the case where the video element was
+  // not yet mounted when we started the camera.
+  useEffect(() => {
+    if (isCameraActive && videoRef.current && streamRef.current) {
+      if (videoRef.current.srcObject !== streamRef.current) {
+        videoRef.current.srcObject = streamRef.current;
+      }
+
+      videoRef.current.play().catch(() => {
+        /* ignore play errors */
+      });
+    }
+  }, [isCameraActive]);
+
+  const switchCamera = async () => {
+    const nextFacingMode = facingMode === "environment" ? "user" : "environment";
+
+    stopCamera();
+    await startCamera(nextFacingMode);
+  };
+
   const stopCamera = () => {
-    const stream = videoRef.current?.srcObject as MediaStream | null;
+    const stream = streamRef.current ?? (videoRef.current?.srcObject as MediaStream | null);
 
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
     }
+
+    streamRef.current = null;
 
     if (videoRef.current) {
       videoRef.current.srcObject = null;
@@ -160,11 +150,6 @@ export default function LiveInspectionPanel({
     onCaptureAndDetect(imageDataUrl, file);
   };
 
-  const handleReset = () => {
-    stopCamera();
-    onReset();
-  };
-
   useEffect(() => {
     return () => {
       stopCamera();
@@ -190,75 +175,81 @@ export default function LiveInspectionPanel({
           </div>
         </div>
 
-        {isInspectionLocked && result && (
-          <div className="inline-flex items-center gap-2 rounded-2xl bg-emerald-50 px-5 py-3 text-sm font-black text-emerald-700">
-            <CheckCircle2 className="h-4 w-4" />
-            Result Saved: {result.predictedClass} —{" "}
-            {result.confidence.toFixed(1)}%
-          </div>
-        )}
       </div>
 
-      <div className="relative overflow-hidden rounded-[2rem] bg-slate-950">
-        {isInspectionLocked && capturedImage ? (
-          <img
-            src={capturedImage}
-            alt="Saved FFB inspection result"
-            className="h-[520px] w-full object-cover"
-          />
-        ) : (
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            className="h-[520px] w-full object-cover"
-          />
-        )}
+      <div className="relative h-[520px] overflow-hidden rounded-[2rem] bg-slate-950">
+          {isCameraActive && (
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="absolute inset-0 h-full w-full object-contain"
+            />
+          )}
 
-        {!isCameraActive && !isInspectionLocked && (
-          <div className="absolute inset-0 flex items-center justify-center bg-slate-950">
-            <div className="text-center">
-              <CameraOff className="mx-auto mb-4 h-16 w-16 text-slate-500" />
-              <p className="text-lg font-black text-white">
-                Camera is not active
-              </p>
-              <p className="mt-2 text-sm text-slate-400">
-                Click open camera to start FFB inspection.
-              </p>
+          {!isCameraActive && capturedImage && isInspectionLocked ? (
+            <img
+              src={capturedImage}
+              alt="Captured FFB image"
+              className="absolute inset-0 h-full w-full object-contain"
+            />
+          ) : null}
+
+          {!isCameraActive && !capturedImage && (
+            <div className="absolute inset-0 flex items-center justify-center bg-slate-950">
+              <div className="text-center">
+                <CameraOff className="mx-auto mb-4 h-16 w-16 text-slate-500" />
+                {isInspectionLocked ? (
+                  <>
+                    <p className="text-lg font-black text-white">
+                      Result already saved
+                    </p>
+                    <p className="mt-2 text-sm text-slate-400">
+                      Reopen the camera to inspect the next batch. The result stays in the Results section below.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-lg font-black text-white">
+                      Camera is not active
+                    </p>
+                    <p className="mt-2 text-sm text-slate-400">
+                      Click open camera to start FFB inspection.
+                    </p>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {isCameraActive && !isInspectionLocked && (
-          <div className="absolute left-4 top-4 rounded-full bg-red-500 px-4 py-2 text-xs font-black text-white shadow-sm">
-            CAMERA LIVE
-          </div>
-        )}
-
-        {isInspectionLocked && (
-          <div className="absolute left-4 top-4 flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-xs font-black text-white shadow-sm">
-            <CheckCircle2 className="h-4 w-4" />
-            SAVED RESULT
-          </div>
-        )}
-
-        {!isInspectionLocked &&
-          result?.detections.map((box) => (
-            <DetectionBoxOverlay key={box.id} box={box} />
-          ))}
-
-        {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm">
-            <div className="text-center text-white">
-              <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-emerald-400" />
-              <p className="font-black">Analyzing Captured Image...</p>
-              <p className="mt-2 text-sm text-slate-300">
-                Please wait while the model processes the FFB image.
-              </p>
+          {isCameraActive && !isInspectionLocked && (
+            <div className="absolute left-4 top-4 rounded-full bg-red-500 px-4 py-2 text-xs font-black text-white shadow-sm">
+              CAMERA LIVE
             </div>
-          </div>
-        )}
+          )}
+
+          {isCameraActive && (
+            <button
+              onClick={switchCamera}
+              disabled={isLoading}
+              className="absolute right-4 top-4 rounded-full bg-slate-900/85 px-4 py-2 text-xs font-black text-white shadow-sm backdrop-blur-sm transition hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Switch Camera
+            </button>
+          )}
+
+          {isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm">
+              <div className="text-center text-white">
+                <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-emerald-400" />
+                <p className="font-black">Analyzing Captured Image...</p>
+                <p className="mt-2 text-sm text-slate-300">
+                  Please wait while the model processes the FFB image.
+                </p>
+              </div>
+            </div>
+          )}
 
         <canvas ref={canvasRef} className="hidden" />
       </div>
@@ -269,15 +260,15 @@ export default function LiveInspectionPanel({
         </div>
       )}
 
-      <div className="mt-5 grid gap-3 md:grid-cols-3">
-        {!isCameraActive && !isInspectionLocked ? (
+      <div className="mt-5 grid gap-3 md:grid-cols-2">
+        {!isCameraActive ? (
           <button
-            onClick={startCamera}
+            onClick={() => startCamera()}
             className="rounded-2xl bg-emerald-700 px-5 py-4 font-black text-white transition hover:bg-emerald-800"
           >
-            Open Camera
+            {isInspectionLocked ? "Reopen Camera" : "Open Camera"}
           </button>
-        ) : isCameraActive && !isInspectionLocked ? (
+        ) : (
           <button
             onClick={captureFrame}
             disabled={isLoading}
@@ -286,16 +277,9 @@ export default function LiveInspectionPanel({
             <ScanLine className="h-5 w-5" />
             Capture & Save Result
           </button>
-        ) : (
-          <button
-            disabled
-            className="cursor-not-allowed rounded-2xl bg-emerald-100 px-5 py-4 font-black text-emerald-700"
-          >
-            Result Saved
-          </button>
         )}
 
-        {isCameraActive && !isInspectionLocked ? (
+        {isCameraActive ? (
           <button
             onClick={stopCamera}
             className="rounded-2xl bg-slate-800 px-5 py-4 font-black text-white transition hover:bg-slate-900"
@@ -307,93 +291,16 @@ export default function LiveInspectionPanel({
             disabled
             className="cursor-not-allowed rounded-2xl bg-slate-100 px-5 py-4 font-black text-slate-400"
           >
-            Close Camera
+            Camera Idle
           </button>
         )}
-
-        <button
-          onClick={handleReset}
-          className="flex items-center justify-center gap-2 rounded-2xl bg-slate-100 px-5 py-4 font-black text-slate-700 transition hover:bg-slate-200"
-        >
-          <RefreshCcw className="h-5 w-5" />
-          Reset for New Batch
-        </button>
       </div>
 
-      {result ? (
-        <>
-          <div className="mt-6 grid gap-4 md:grid-cols-4">
-            <MetricCard
-              title="Final Grade"
-              value={result.predictedClass}
-              subtitle="Saved inspection class"
-              variant="dark"
-            />
-
-            <MetricCard
-              title="Confidence"
-              value={`${result.confidence.toFixed(1)}%`}
-              subtitle="Saved model confidence"
-              variant="green"
-            />
-
-            <MetricCard
-              title="Detected Objects"
-              value={result.detections.length}
-              subtitle="Total detected FFB areas"
-              variant="orange"
-            />
-
-            <MetricCard
-              title="Quality Status"
-              value={
-                result.confidence >= 90
-                  ? "High"
-                  : result.confidence >= 75
-                  ? "Medium"
-                  : "Low"
-              }
-              subtitle="Reliability level"
-              variant="green"
-            />
-          </div>
-
-          <div className="mt-5 rounded-[2rem] border border-slate-100 p-5">
-            <h3 className="mb-4 text-lg font-black text-slate-900">
-              Ripeness Distribution
-            </h3>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              <MetricCard
-                title="Under Ripe"
-                value={result.summary.underRipe}
-                subtitle="Detected under ripe areas"
-                variant="green"
-              />
-
-              <MetricCard
-                title="Ripe"
-                value={result.summary.ripe}
-                subtitle="Detected ripe areas"
-                variant="orange"
-              />
-
-              <MetricCard
-                title="Over Ripe"
-                value={result.summary.overRipe}
-                subtitle="Detected over ripe areas"
-                variant="red"
-              />
-            </div>
-          </div>
-        </>
-      ) : (
-        <div className="mt-5 rounded-2xl bg-emerald-50 p-4 text-sm leading-relaxed text-emerald-900">
-          Open the camera, position the FFB in view, then click{" "}
-          <strong>Capture & Save Result</strong> to run detection and save the
-          inspection result.
-        </div>
-      )}
+      <div className="mt-5 rounded-2xl bg-emerald-50 p-4 text-sm leading-relaxed text-emerald-900">
+        Open the camera, position the FFB in view, then click{" "}
+        <strong>Capture & Save Result</strong> to run detection. Saved results
+        appear in the Results section below.
+      </div>
     </section>
   );
 }

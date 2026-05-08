@@ -9,7 +9,6 @@ import type {
 import MetricCard from "@/components/MetricCard";
 
 type DetectionResultProps = {
-  capturedImage: string | null;
   result: DetectionResponse | null;
 };
 
@@ -57,7 +56,6 @@ function DetectionBoxOverlay({ box }: { box: DetectionBox }) {
 }
 
 export default function DetectionResult({
-  capturedImage,
   result,
 }: DetectionResultProps) {
   return (
@@ -87,12 +85,12 @@ export default function DetectionResult({
       </div>
 
       <div className="relative overflow-hidden rounded-[2rem] bg-slate-100">
-        {capturedImage ? (
+        {result?.annotatedImage ? (
           <>
             <img
-              src={capturedImage}
+              src={result.annotatedImage}
               alt="Captured FFB result"
-              className="h-[430px] w-full object-cover"
+              className="h-[430px] w-full object-contain"
             />
 
             {result?.detections.map((box) => (
