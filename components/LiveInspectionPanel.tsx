@@ -243,9 +243,10 @@ export default function LiveInspectionPanel({
           </div>
         )}
 
-        {result?.detections.map((box) => (
-          <DetectionBoxOverlay key={box.id} box={box} />
-        ))}
+        {!isInspectionLocked &&
+          result?.detections.map((box) => (
+            <DetectionBoxOverlay key={box.id} box={box} />
+          ))}
 
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm">

@@ -23,4 +23,26 @@ export type DetectionResponse = {
   confidence: number;
   detections: DetectionBox[];
   summary: DetectionSummary;
+  totalDetections?: number;
+  annotatedImage?: string;
+};
+
+export type FastApiDetectionBox = {
+  class_id: number;
+  class_name: string;
+  confidence: number;
+  bbox: {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+  };
+};
+
+export type FastApiDetectionResponse = {
+  success: boolean;
+  total_detections: number;
+  summary: Record<string, number>;
+  detections: FastApiDetectionBox[];
+  annotated_image?: string;
 };

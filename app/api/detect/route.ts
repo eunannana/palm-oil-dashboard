@@ -1,10 +1,93 @@
 import { NextResponse } from "next/server";
-import type { DetectionResponse } from "@/types/detection";
+import type {
+  DetectionResponse,
+  FastApiDetectionResponse,
+  RipenessClass,
+} from "@/types/detection";
+
+const FASTAPI_PREDICT_URL =
+  process.env.FASTAPI_PREDICT_URL ?? "http://localhost:8000/predict";
+
+function normalizeClassName(className: string): RipenessClass {
+  const normalized = className.toLowerCase().replace(/\s+/g, " ").trim();
+
+  if (normalized === "under ripe" || normalized === "unripe") {
+    return "Under Ripe";
+  }
+
+  if (normalized === "over ripe" || normalized === "overripe") {
+    return "Over Ripe";
+  }
+
+  return "Ripe";
+}
+
+function pickPredictedClass(summary: DetectionResponse["summary"]): RipenessClass {
+  const entries: Array<[RipenessClass, number]> = [
+    ["Under Ripe", summary.underRipe],
+    ["Ripe", summary.ripe],
+    ["Over Ripe", summary.overRipe],
+  ];
+
+  entries.sort((first, second) => second[1] - first[1]);
+
+  return entries[0]?.[0] ?? "Ripe";
+}
+
+function normalizeSummary(summary: Record<string, number>): DetectionResponse["summary"] {
+  const result = {
+    underRipe: 0,
+    ripe: 0,
+    overRipe: 0,
+  };
+
+  for (const [label, count] of Object.entries(summary)) {
+    const normalized = normalizeClassName(label);
+
+    if (normalized === "Under Ripe") {
+      result.underRipe += count;
+    } else if (normalized === "Over Ripe") {
+      result.overRipe += count;
+    } else {
+      result.ripe += count;
+    }
+  }
+
+  return result;
+}
+
+function normalizeBackendResponse(data: FastApiDetectionResponse): DetectionResponse {
+  const summary = normalizeSummary(data.summary);
+  const detections = data.detections.map((box, index) => ({
+    id: index + 1,
+    label: normalizeClassName(box.class_name),
+    confidence: box.confidence,
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+  }));
+  const confidence =
+    detections.length > 0
+      ? Math.max(...detections.map((item) => item.confidence)) * 100
+      : 0;
+
+  return {
+    status: "success",
+    message: "FFB grading completed successfully.",
+    predictedClass: pickPredictedClass(summary),
+    confidence,
+    detections,
+    summary,
+    totalDetections: data.total_detections,
+    annotatedImage: data.annotated_image,
+  };
+}
 
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
-    const image = formData.get("image");
+    const image = formData.get("image") ?? formData.get("file");
 
     if (!image || !(image instanceof File)) {
       return NextResponse.json(
@@ -16,108 +99,29 @@ export async function POST(request: Request) {
       );
     }
 
-    /*
-      ==========================================================
-      SPACE UNTUK INTEGRASI MODEL DEEP LEARNING
-      ==========================================================
+    const backendForm = new FormData();
+    backendForm.append("file", image);
 
-      Flow kamera:
-      1. User membuka kamera di dashboard.
-      2. User capture gambar.
-      3. Gambar dikirim ke /api/detect.
-      4. /api/detect mengirim image ke backend model.
-      5. Backend mengembalikan hasil deteksi.
+    const response = await fetch(FASTAPI_PREDICT_URL, {
+      method: "POST",
+      body: backendForm,
+    });
 
-      Jika memakai FastAPI:
+    const payload = (await response.json()) as FastApiDetectionResponse | { error?: string };
 
-      const backendForm = new FormData();
-      backendForm.append("image", image);
-
-      const response = await fetch("http://localhost:8000/predict", {
-        method: "POST",
-        body: backendForm,
-      });
-
-      const modelResult = await response.json();
-      return NextResponse.json(modelResult);
-
-      Format output backend:
-      {
-        "status": "success",
-        "message": "Detection completed",
-        "predictedClass": "Ripe",
-        "confidence": 92.7,
-        "detections": [...],
-        "summary": {
-          "underRipe": 1,
-          "ripe": 3,
-          "overRipe": 1
-        }
-      }
-    */
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const result: DetectionResponse = {
-      status: "success",
-      message: "FFB grading completed successfully.",
-      predictedClass: "Ripe",
-      confidence: 92.7,
-      detections: [
+    if (!response.ok) {
+      return NextResponse.json(
         {
-          id: 1,
-          label: "Ripe",
-          confidence: 0.94,
-          x: 24,
-          y: 30,
-          width: 18,
-          height: 22,
+          status: "error",
+          message:
+            ("error" in payload && payload.error) ||
+            "Failed to process image with FastAPI backend.",
         },
-        {
-          id: 2,
-          label: "Ripe",
-          confidence: 0.91,
-          x: 48,
-          y: 38,
-          width: 17,
-          height: 20,
-        },
-        {
-          id: 3,
-          label: "Ripe",
-          confidence: 0.88,
-          x: 38,
-          y: 62,
-          width: 16,
-          height: 18,
-        },
-        {
-          id: 4,
-          label: "Under Ripe",
-          confidence: 0.79,
-          x: 67,
-          y: 27,
-          width: 15,
-          height: 18,
-        },
-        {
-          id: 5,
-          label: "Over Ripe",
-          confidence: 0.83,
-          x: 70,
-          y: 58,
-          width: 17,
-          height: 20,
-        },
-      ],
-      summary: {
-        underRipe: 1,
-        ripe: 3,
-        overRipe: 1,
-      },
-    };
+        { status: response.status }
+      );
+    }
 
-    return NextResponse.json(result);
+    return NextResponse.json(normalizeBackendResponse(payload as FastApiDetectionResponse));
   } catch (error) {
     console.error(error);
 

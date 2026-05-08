@@ -1,5 +1,3 @@
-import { AlertTriangle } from "lucide-react";
-
 export default function Footer() {
   return (
     <footer className="mt-10 border-t border-emerald-100 bg-white/70">

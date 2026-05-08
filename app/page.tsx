@@ -6,7 +6,6 @@ import LiveInspectionPanel from "@/components/LiveInspectionPanel";
 import ReportPanel from "@/components/ReportPanel";
 import Footer from "@/components/Footer";
 import type { DetectionResponse } from "@/types/detection";
-import { BarChart3, FileCheck2, Timer } from "lucide-react";
 
 export default function HomePage() {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -29,7 +28,7 @@ export default function HomePage() {
       setCapturedImage(imageDataUrl);
 
       const formData = new FormData();
-      formData.append("image", imageFile);
+      formData.append("file", imageFile);
       formData.append("batchNumber", batchNumber);
       formData.append("inspectionDate", inspectionDate);
       formData.append("remarks", remarks);
@@ -46,6 +45,7 @@ export default function HomePage() {
       const data: DetectionResponse = await response.json();
 
       setResult(data);
+      setCapturedImage(data.annotatedImage ?? imageDataUrl);
       setIsInspectionLocked(true);
     } catch (error) {
       console.error(error);

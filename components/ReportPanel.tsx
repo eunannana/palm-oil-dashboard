@@ -5,6 +5,12 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { DetectionResponse } from "@/types/detection";
 
+type JsPdfWithAutoTable = jsPDF & {
+  lastAutoTable?: {
+    finalY: number;
+  };
+};
+
 type ReportPanelProps = {
   result: DetectionResponse | null;
   capturedImage: string | null;
@@ -28,6 +34,10 @@ export default function ReportPanel({
 }: ReportPanelProps) {
   const createAnnotatedImage = async () => {
     if (!capturedImage || !result) return null;
+
+    if (result.annotatedImage) {
+      return result.annotatedImage;
+    }
 
     return new Promise<string | null>((resolve) => {
       const image = new Image();
@@ -103,7 +113,7 @@ export default function ReportPanel({
     const reportDate = inspectionDate || new Date().toISOString().split("T")[0];
     const batch = batchNumber || "Not specified";
 
-    const doc = new jsPDF("p", "mm", "a4");
+    const doc = new jsPDF("p", "mm", "a4") as JsPdfWithAutoTable;
     const annotatedImage = await createAnnotatedImage();
 
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -153,7 +163,7 @@ export default function ReportPanel({
       margin: { left: margin, right: margin },
     });
 
-    let currentY = (doc as any).lastAutoTable.finalY + 10;
+    let currentY = (doc.lastAutoTable?.finalY ?? 46) + 10;
 
     if (annotatedImage || capturedImage) {
       doc.setFontSize(12);
@@ -215,7 +225,7 @@ export default function ReportPanel({
       margin: { left: margin, right: margin },
     });
 
-    currentY = (doc as any).lastAutoTable.finalY + 10;
+    currentY = (doc.lastAutoTable?.finalY ?? currentY) + 10;
 
     autoTable(doc, {
       startY: currentY,
@@ -238,7 +248,7 @@ export default function ReportPanel({
       margin: { left: margin, right: margin },
     });
 
-    currentY = (doc as any).lastAutoTable.finalY + 10;
+    currentY = (doc.lastAutoTable?.finalY ?? currentY) + 10;
 
     if (currentY > 240) {
       doc.addPage();
