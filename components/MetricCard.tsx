@@ -2,7 +2,7 @@ type MetricCardProps = {
   title: string;
   value: string | number;
   subtitle: string;
-  variant: "green" | "orange" | "red" | "dark";
+  variant: "green" | "orange" | "red" | "dark" | "lime";
 };
 
 const variants = {
@@ -20,6 +20,11 @@ const variants = {
     card: "bg-red-50 border-red-100",
     text: "text-red-900",
     dot: "bg-red-500",
+  },
+  lime: {
+    card: "bg-lime-50 border-lime-100",
+    text: "text-lime-900",
+    dot: "bg-lime-500",
   },
   dark: {
     card: "bg-slate-950 border-slate-800",

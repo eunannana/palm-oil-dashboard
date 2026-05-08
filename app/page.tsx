@@ -7,7 +7,7 @@ import DetectionResult from "@/components/DetectionResult";
 import ReportPanel from "@/components/ReportPanel";
 import Footer from "@/components/Footer";
 import FileUpload from "@/components/FileUpload";
-import type { DetectionResponse, FastApiDetectionBox, DetectionBox, RipenessClass } from "@/types/detection";
+import type { DetectionResponse, FastApiDetectionBox, DetectionBox, DetectionClass } from "@/types/detection";
 
 export default function HomePage() {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -76,7 +76,7 @@ export default function HomePage() {
 
               return {
                 id: base.id ?? idx + 1,
-                label: (base.label as RipenessClass) ?? "Ripe",
+                label: (base.label as DetectionClass) ?? "ripe",
                 confidence: base.confidence ?? box.confidence,
                 x: (x1 / imgW) * 100,
                 y: (y1 / imgH) * 100,
@@ -222,7 +222,7 @@ export default function HomePage() {
               <span className="loader-orbit absolute inset-0 rounded-full border-2 border-emerald-700 border-b-transparent" />
             </div>
             <p>
-              Processing is taking longer than usual because the free backend is waking up. Detection is still running.
+              Processing is taking longer than usual because the backend is waking up. Detection is still running.
             </p>
           </div>
         )}

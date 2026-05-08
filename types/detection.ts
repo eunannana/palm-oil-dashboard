@@ -1,8 +1,33 @@
-export type RipenessClass = "Under Ripe" | "Ripe" | "Over Ripe";
+export type DetectionClass =
+  | "empty_bunch"
+  | "overripe"
+  | "ripe"
+  | "underripe"
+  | "unripe";
+
+export const DETECTION_CLASS_ORDER: DetectionClass[] = [
+  "empty_bunch",
+  "overripe",
+  "ripe",
+  "underripe",
+  "unripe",
+];
+
+export const DETECTION_CLASS_LABELS: Record<DetectionClass, string> = {
+  empty_bunch: "Empty Bunch",
+  overripe: "Overripe",
+  ripe: "Ripe",
+  underripe: "Underripe",
+  unripe: "Unripe",
+};
+
+export function formatDetectionClass(className: DetectionClass) {
+  return DETECTION_CLASS_LABELS[className] ?? className;
+}
 
 export type DetectionBox = {
   id: number;
-  label: RipenessClass;
+  label: DetectionClass;
   confidence: number;
   x: number;
   y: number;
@@ -11,15 +36,17 @@ export type DetectionBox = {
 };
 
 export type DetectionSummary = {
-  underRipe: number;
+  empty_bunch: number;
+  overripe: number;
   ripe: number;
-  overRipe: number;
+  underripe: number;
+  unripe: number;
 };
 
 export type DetectionResponse = {
   status: "success";
   message: string;
-  predictedClass: RipenessClass;
+  predictedClass: DetectionClass;
   confidence: number;
   detections: DetectionBox[];
   summary: DetectionSummary;

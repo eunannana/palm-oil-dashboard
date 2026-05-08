@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import type {
   DetectionResponse,
   FastApiDetectionResponse,
-  RipenessClass,
+  DetectionClass,
 } from "@/types/detection";
+import { DETECTION_CLASS_ORDER } from "@/types/detection";
 
 function normalizeBackendUrl(url: string): string {
   const trimmed = url.trim();
@@ -26,26 +27,32 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function normalizeClassName(className: string): RipenessClass {
+function normalizeClassName(className: string): DetectionClass {
   const normalized = className.toLowerCase().replace(/\s+/g, " ").trim();
 
-  if (normalized === "under ripe" || normalized === "unripe") {
-    return "Under Ripe";
+  if (normalized === "empty bunch" || normalized === "empty_bunch") {
+    return "empty_bunch";
   }
 
   if (normalized === "over ripe" || normalized === "overripe") {
-    return "Over Ripe";
+    return "overripe";
   }
 
-  return "Ripe";
+  if (normalized === "under ripe" || normalized === "underripe") {
+    return "underripe";
+  }
+
+  if (normalized === "unripe") {
+    return "unripe";
+  }
+
+  return "ripe";
 }
 
-function pickPredictedClass(summary: DetectionResponse["summary"]): RipenessClass {
-  const entries: Array<[RipenessClass, number]> = [
-    ["Under Ripe", summary.underRipe],
-    ["Ripe", summary.ripe],
-    ["Over Ripe", summary.overRipe],
-  ];
+function pickPredictedClass(summary: DetectionResponse["summary"]): DetectionClass {
+  const entries = DETECTION_CLASS_ORDER.map(
+    (className) => [className, summary[className]] as const
+  );
 
   entries.sort((first, second) => second[1] - first[1]);
 
@@ -54,21 +61,17 @@ function pickPredictedClass(summary: DetectionResponse["summary"]): RipenessClas
 
 function normalizeSummary(summary: Record<string, number>): DetectionResponse["summary"] {
   const result = {
-    underRipe: 0,
+    empty_bunch: 0,
+    overripe: 0,
     ripe: 0,
-    overRipe: 0,
+    underripe: 0,
+    unripe: 0,
   };
 
   for (const [label, count] of Object.entries(summary)) {
     const normalized = normalizeClassName(label);
 
-    if (normalized === "Under Ripe") {
-      result.underRipe += count;
-    } else if (normalized === "Over Ripe") {
-      result.overRipe += count;
-    } else {
-      result.ripe += count;
-    }
+    result[normalized] += count;
   }
 
   return result;
@@ -129,11 +132,12 @@ export async function POST(request: Request) {
       return backendForm;
     };
 
-    // try immediate predict first
+    // try immediate predict first with 30s timeout
     try {
       const response = await fetch(FASTAPI_PREDICT_URL, {
         method: "POST",
         body: buildBackendFormData(),
+        signal: AbortSignal.timeout(30000),
       });
 
       if (!response.ok) {
@@ -153,16 +157,19 @@ export async function POST(request: Request) {
         // ignore - waking may still happen at host level
       }
 
-      // Poll predict endpoint a few times with backoff
+      // Poll predict endpoint with extended backoff for free-tier backends that may sleep
+      // Each retry waits incrementally (1s, 2s, 3s...) then attempts with 20s timeout
+      // Total wait time: up to ~140s (21s delays + 6*20s timeouts) = ~2.3 minutes
       const maxRetries = 6;
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        const delayMs = 1000 * attempt; // 1s, 2s, 3s...
+        const delayMs = 1000 * attempt; // 1s, 2s, 3s, 4s, 5s, 6s
         await sleep(delayMs);
 
         try {
           const response = await fetch(FASTAPI_PREDICT_URL, {
             method: "POST",
             body: buildBackendFormData(),
+            signal: AbortSignal.timeout(20000), // 20s per request
           });
 
           if (!response.ok) {
@@ -182,7 +189,7 @@ export async function POST(request: Request) {
         {
           status: "error",
           message:
-            "Backend is currently unreachable. We attempted to wake it but did not receive a response. Try again in a few seconds.",
+            "Backend is still loading and did not respond after multiple attempts (waited ~140s). The free-tier backend may be experiencing heavy load. Please try again in a moment.",
         },
         { status: 502 }
       );
@@ -200,7 +207,7 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET(request: Request) {
+export async function GET() {
   // Lightweight wake endpoint: try to hit the root URL and wait until the
   // backend responds or we exhaust retries. This lets the frontend show a
   // loading indicator while a sleeping free-hosted backend wakes up.

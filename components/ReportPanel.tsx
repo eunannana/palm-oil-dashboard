@@ -3,7 +3,11 @@
 import { Download, FileText } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import type { DetectionResponse } from "@/types/detection";
+import type { DetectionClass, DetectionResponse } from "@/types/detection";
+import {
+  DETECTION_CLASS_ORDER,
+  formatDetectionClass,
+} from "@/types/detection";
 
 type JsPdfWithAutoTable = jsPDF & {
   lastAutoTable?: {
@@ -64,17 +68,17 @@ export default function ReportPanel({
           const width = (box.width / 100) * canvas.width;
           const height = (box.height / 100) * canvas.height;
 
-          let color = "#f97316";
+          const colors: Record<DetectionClass, string> = {
+            empty_bunch: "#475569",
+            overripe: "#dc2626",
+            ripe: "#16a34a",
+            underripe: "#f59e0b",
+            unripe: "#65a30d",
+          };
 
-          if (box.label === "Under Ripe") {
-            color = "#16a34a";
-          }
+          const color = colors[box.label];
 
-          if (box.label === "Over Ripe") {
-            color = "#dc2626";
-          }
-
-          const label = `${box.label} ${(box.confidence * 100).toFixed(0)}%`;
+          const label = `${formatDetectionClass(box.label)} ${(box.confidence * 100).toFixed(0)}%`;
 
           context.lineWidth = Math.max(4, canvas.width * 0.004);
           context.strokeStyle = color;
@@ -207,11 +211,10 @@ export default function ReportPanel({
     autoTable(doc, {
       startY: currentY,
       head: [["Ripeness Category", "Total Detected"]],
-      body: [
-        ["Under Ripe", result.summary.underRipe],
-        ["Ripe", result.summary.ripe],
-        ["Over Ripe", result.summary.overRipe],
-      ],
+      body: DETECTION_CLASS_ORDER.map((className) => [
+        formatDetectionClass(className),
+        result.summary[className],
+      ]),
       theme: "grid",
       headStyles: {
         fillColor: [22, 163, 74],
@@ -343,12 +346,15 @@ export default function ReportPanel({
 
       <div className="mt-4">
         <label className="text-sm font-bold text-slate-700">
-          Remarks
+          Remarks / API Note
         </label>
+        <p className="mt-1 text-xs text-slate-500">
+          Use this section for inspection remarks or a short API status note.
+        </p>
         <textarea
           value={remarks}
           onChange={(event) => onRemarksChange(event.target.value)}
-          placeholder="Example: Batch inspected from field block A. Fruit bunches show mostly ripe condition."
+          placeholder="Example: Batch inspected from field block A. API note: backend may take a few seconds to wake up."
           rows={4}
           className="mt-2 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-emerald-500 focus:bg-white"
         />

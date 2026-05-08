@@ -1,10 +1,15 @@
 "use client";
 
 import { Activity, CheckCircle2, ScanLine } from "lucide-react";
+import Image from "next/image";
 import type {
   DetectionBox,
   DetectionResponse,
-  RipenessClass,
+  DetectionClass,
+} from "@/types/detection";
+import {
+  DETECTION_CLASS_ORDER,
+  formatDetectionClass,
 } from "@/types/detection";
 import MetricCard from "@/components/MetricCard";
 
@@ -14,23 +19,31 @@ type DetectionResultProps = {
 };
 
 const boxStyle: Record<
-  RipenessClass,
+  DetectionClass,
   {
     border: string;
     badge: string;
   }
 > = {
-  "Under Ripe": {
+  empty_bunch: {
+    border: "border-slate-500",
+    badge: "bg-slate-700",
+  },
+  overripe: {
+    border: "border-red-500",
+    badge: "bg-red-600",
+  },
+  ripe: {
     border: "border-emerald-500",
     badge: "bg-emerald-600",
   },
-  Ripe: {
-    border: "border-orange-500",
-    badge: "bg-orange-500",
+  underripe: {
+    border: "border-amber-500",
+    badge: "bg-amber-500",
   },
-  "Over Ripe": {
-    border: "border-red-500",
-    badge: "bg-red-600",
+  unripe: {
+    border: "border-lime-500",
+    badge: "bg-lime-600",
   },
 };
 
@@ -89,11 +102,16 @@ export default function DetectionResult({
       <div className="relative overflow-hidden rounded-[2rem] bg-slate-100">
         {result?.annotatedImage ? (
           <>
-            <img
-              src={result.annotatedImage}
-              alt="Captured FFB result"
-              className="h-[430px] w-full object-contain"
-            />
+            <div className="relative h-[430px] w-full">
+              <Image
+                src={result.annotatedImage}
+                alt="Captured FFB result"
+                fill
+                unoptimized
+                className="object-contain"
+                sizes="100vw"
+              />
+            </div>
 
             {result?.detections.map((box) => (
               <DetectionBoxOverlay key={box.id} box={box} />
@@ -112,7 +130,7 @@ export default function DetectionResult({
                 Processing detection result
               </p>
               <p className="mt-2 text-sm text-slate-500">
-                Model sedang menganalisis citra FFB. Hasil akan muncul otomatis.
+                The model is analyzing the FFB image. Results will appear automatically.
               </p>
             </div>
           </div>
@@ -138,7 +156,7 @@ export default function DetectionResult({
           <div className="mt-6 grid gap-4 md:grid-cols-4">
             <MetricCard
               title="Final Grade"
-              value={result.predictedClass}
+              value={formatDetectionClass(result.predictedClass)}
               subtitle="Main predicted class"
               variant="dark"
             />
@@ -173,36 +191,35 @@ export default function DetectionResult({
 
           <div className="mt-5 rounded-[2rem] border border-slate-100 p-5">
             <h3 className="mb-4 text-lg font-black text-slate-900">
-              Ripeness Distribution
+              Class Distribution
             </h3>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <MetricCard
-                title="Under Ripe"
-                value={result.summary.underRipe}
-                subtitle="Detected under ripe areas"
-                variant="green"
-              />
+            <div className="grid gap-4 md:grid-cols-5">
+              {DETECTION_CLASS_ORDER.map((className) => {
+                const variants: Record<DetectionClass, "dark" | "red" | "green" | "orange" | "lime"> = {
+                  empty_bunch: "dark",
+                  overripe: "red",
+                  ripe: "green",
+                  underripe: "orange",
+                  unripe: "lime",
+                };
 
-              <MetricCard
-                title="Ripe"
-                value={result.summary.ripe}
-                subtitle="Detected ripe areas"
-                variant="orange"
-              />
-
-              <MetricCard
-                title="Over Ripe"
-                value={result.summary.overRipe}
-                subtitle="Detected over ripe areas"
-                variant="red"
-              />
+                return (
+                  <MetricCard
+                    key={className}
+                    title={formatDetectionClass(className)}
+                    value={result.summary[className]}
+                    subtitle="Detected class total"
+                    variant={variants[className]}
+                  />
+                );
+              })}
             </div>
           </div>
         </>
       ) : isLoading ? (
         <div className="mt-6 rounded-3xl bg-emerald-50 p-5 text-sm leading-relaxed text-emerald-900">
-          Waiting for inference results from the server. This may take a little longer when the free backend is busy..
+          Waiting for inference results from the server. This may take a little longer when the backend is busy.
         </div>
       ) : (
         <div className="mt-6 rounded-3xl bg-slate-50 p-5 text-sm leading-relaxed text-slate-500">
